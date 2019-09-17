@@ -64,13 +64,14 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
                     "Failed to open a server socket.", e);
         }
     }
-
+    //Channel对应的配置对象
     private final ServerSocketChannelConfig config;
 
     /**
      * Create a new instance
      */
     public NioServerSocketChannel() {
+        //默认的SelectorProvider实现类
         this(newSocket(DEFAULT_SELECTOR_PROVIDER));
     }
 
@@ -83,6 +84,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
     /**
      * Create a new instance using the given {@link ServerSocketChannel}.
+     * 构造方法
      */
     public NioServerSocketChannel(ServerSocketChannel channel) {
         super(null, channel, SelectionKey.OP_ACCEPT);

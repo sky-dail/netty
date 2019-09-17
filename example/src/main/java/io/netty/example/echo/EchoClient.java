@@ -43,6 +43,7 @@ public final class EchoClient {
 
     public static void main(String[] args) throws Exception {
         // Configure SSL.git
+        //配置ssl
         final SslContext sslCtx;
         if (SSL) {
             sslCtx = SslContextBuilder.forClient()
@@ -52,15 +53,16 @@ public final class EchoClient {
         }
 
         // Configure the client.
+        //创建一个EventLoopGroup对象
         EventLoopGroup group = new NioEventLoopGroup();
         try {
             Bootstrap b = new Bootstrap();
-            b.group(group)
-             .channel(NioSocketChannel.class)
-             .option(ChannelOption.TCP_NODELAY, true)
+            b.group(group)//设置使用的EventLoopGroup
+             .channel(NioSocketChannel.class)//设置要实例化的为NioSocketChannel类
+             .option(ChannelOption.TCP_NODELAY, true)  //设置NioSocketChannel的可选项
              .handler(new ChannelInitializer<SocketChannel>() {
                  @Override
-                 public void initChannel(SocketChannel ch) throws Exception {
+                 public void initChannel(SocketChannel ch) throws Exception { //设置NioSocketChannel的处理器
                      ChannelPipeline p = ch.pipeline();
                      if (sslCtx != null) {
                          p.addLast(sslCtx.newHandler(ch.alloc(), HOST, PORT));
@@ -71,13 +73,13 @@ public final class EchoClient {
              });
 
             // Start the client.
-            ChannelFuture f = b.connect(HOST, PORT).sync();
+            ChannelFuture f = b.connect(HOST, PORT).sync();//连接服务器，并等待同步成功，即启动客户端
 
             // Wait until the connection is closed.
-            f.channel().closeFuture().sync();
+            f.channel().closeFuture().sync();//监听客户端关闭，并阻塞等待
         } finally {
             // Shut down the event loop to terminate all threads.
-            group.shutdownGracefully();
+            group.shutdownGracefully();//优雅关闭一个EventLoopEvent对象
         }
     }
 }

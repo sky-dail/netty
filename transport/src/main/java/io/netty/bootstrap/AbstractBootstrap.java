@@ -48,13 +48,25 @@ import java.util.Map;
  * transports such as datagram (UDP).</p>
  */
 public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C extends Channel> implements Cloneable {
-
+   //B，C分别代表 B代表AbstractBootstrap类，用于表示自身的类型   C表示Channel类
+    //EventLoopGroup 对象
     volatile EventLoopGroup group;
+
     @SuppressWarnings("deprecation")
+    //channel工厂类，用于创建Channel对象
+
     private volatile ChannelFactory<? extends C> channelFactory;
+
+    //本地地址
     private volatile SocketAddress localAddress;
+
+    //可选项集合
     private final Map<ChannelOption<?>, Object> options = new LinkedHashMap<ChannelOption<?>, Object>();
+
+    //属性集合
     private final Map<AttributeKey<?>, Object> attrs = new LinkedHashMap<AttributeKey<?>, Object>();
+
+    // 处理器
     private volatile ChannelHandler handler;
 
     AbstractBootstrap() {
@@ -66,10 +78,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         channelFactory = bootstrap.channelFactory;
         handler = bootstrap.handler;
         localAddress = bootstrap.localAddress;
-        synchronized (bootstrap.options) {
+        synchronized (bootstrap.options) {    //<1>    //为什么使用synchronized 关键字？？
+                                                // 传入参数的时候，可能在另外的线程被修改 ，使用其来同步，解决此问题
             options.putAll(bootstrap.options);
         }
-        synchronized (bootstrap.attrs) {
+        synchronized (bootstrap.attrs) {    //<2>
+
             attrs.putAll(bootstrap.attrs);
         }
     }
@@ -88,7 +102,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         this.group = group;
         return self();
     }
-
+    //返回自己
     @SuppressWarnings("unchecked")
     private B self() {
         return (B) this;
@@ -114,7 +128,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         if (channelFactory == null) {
             throw new NullPointerException("channelFactory");
         }
-        if (this.channelFactory != null) {
+        if (this.channelFactory != null) {   //不允许重复设置
             throw new IllegalStateException("channelFactory set already");
         }
 
@@ -145,6 +159,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     /**
      * @see #localAddress(SocketAddress)
      */
+    //一般情况下，不会调用该方法进行配置，而是调用bind()方法
     public B localAddress(int inetPort) {
         return localAddress(new InetSocketAddress(inetPort));
     }
@@ -172,11 +187,11 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             throw new NullPointerException("option");
         }
         if (value == null) {
-            synchronized (options) {
+            synchronized (options) {  //空，意味着删除
                 options.remove(option);
             }
         } else {
-            synchronized (options) {
+            synchronized (options) {    //非空，意味着修改
                 options.put(option, value);
             }
         }
@@ -191,12 +206,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         if (key == null) {
             throw new NullPointerException("key");
         }
-        if (value == null) {
+        if (value == null) {     //空，意味着删除
             synchronized (attrs) {
                 attrs.remove(key);
             }
         } else {
-            synchronized (attrs) {
+            synchronized (attrs) {   //非空，意味着修改
                 attrs.put(key, value);
             }
         }
@@ -206,6 +221,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     /**
      * Validate all the parameters. Sub-classes may override this, but should
      * call the super method in that case.
+     * 校验配置是否正确
      */
     public B validate() {
         if (group == null) {
@@ -222,6 +238,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      * multiple {@link Channel}s with similar settings.  Please note that this method does not clone the
      * {@link EventLoopGroup} deeply but shallowly, making the group a shared resource.
      */
+    //来自实现cloneable 接口，在子类中实现。这是深拷贝，即创建一个新对象，但不是所有的属性是深拷贝
+    //浅拷贝属性：group、channelFactory、handler、localAddress
+    //深拷贝属性：options、attrs
     @Override
     @SuppressWarnings("CloneDoesntDeclareCloneNotSupportedException")
     public abstract B clone();
@@ -238,6 +257,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      * Create a new {@link Channel} and bind it.
      */
     public ChannelFuture bind() {
+        //校验服务启动需要的必要参数
         validate();
         SocketAddress localAddress = this.localAddress;
         if (localAddress == null) {
@@ -277,18 +297,19 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         }
         return doBind(localAddress);
     }
-
+   //绑定本地地址（包括端口）
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        //初始化并注册一个Channel对象，因为注册时异步的过程，所以返回一个ChannelFuture
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
-        if (regFuture.cause() != null) {
+        if (regFuture.cause() != null) {  //若发生异常，直接返回
             return regFuture;
         }
 
-        if (regFuture.isDone()) {
+        if (regFuture.isDone()) {   //未
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
-            doBind0(regFuture, channel, localAddress, promise);
+            doBind0(regFuture, channel, localAddress, promise);  //绑定
             return promise;
         } else {
             // Registration future is almost always fulfilled already, but just in case it's not.
@@ -317,25 +338,26 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            //创建Channel对象
             channel = channelFactory.newChannel();
             init(channel);
         } catch (Throwable t) {
-            if (channel != null) {
+            if (channel != null) {//已创建channel对象
                 // channel can be null if newChannel crashed (eg SocketException("too many open files"))
-                channel.unsafe().closeForcibly();
+                channel.unsafe().closeForcibly();  //强制关闭channel
                 // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
                 return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
             }
             // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
-
+        //注册Channel到EventLoopGroup中
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
                 channel.close();
             } else {
-                channel.unsafe().closeForcibly();
+                channel.unsafe().closeForcibly();  //强制关闭Channel
             }
         }
 
@@ -362,8 +384,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         channel.eventLoop().execute(new Runnable() {
             @Override
             public void run() {
+                //注册成功，绑定端口
                 if (regFuture.isSuccess()) {
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
+                    //注册失败，回调通知promise异常
                 } else {
                     promise.setFailure(regFuture.cause());
                 }
@@ -374,6 +398,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     /**
      * the {@link ChannelHandler} to use for serving the requests.
      */
+    //设置创建Channel的处理器
     public B handler(ChannelHandler handler) {
         if (handler == null) {
             throw new NullPointerException("handler");

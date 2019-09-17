@@ -245,11 +245,12 @@ public abstract class AbstractNioChannel extends AbstractChannel {
             }
 
             try {
+                //目前有正在连接远程地址的ChannelPromise，则直接抛出异常，禁止同时发起多个连接。
                 if (connectPromise != null) {
                     // Already a connect in process.
                     throw new ConnectionPendingException();
                 }
-
+                //记录Channel是否激活
                 boolean wasActive = isActive();
                 if (doConnect(remoteAddress, localAddress)) {
                     fulfillConnectPromise(promise, wasActive);
@@ -258,6 +259,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                     requestedRemoteAddress = remoteAddress;
 
                     // Schedule connect timeout.
+                    //使用EventLoop发起定时任务，监听远程连接地址超时，若连接超时，则回调通知connectPromise超时异常
                     int connectTimeoutMillis = config().getConnectTimeoutMillis();
                     if (connectTimeoutMillis > 0) {
                         connectTimeoutFuture = eventLoop().schedule(new Runnable() {
@@ -332,14 +334,17 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         public final void finishConnect() {
             // Note this method is invoked by the event loop only if the connection attempt was
             // neither cancelled nor timed out.
-
+            //判断是否在EventChannel的线程中
             assert eventLoop().inEventLoop();
 
             try {
                 boolean wasActive = isActive();
+                //执行完成连接
                 doFinishConnect();
+                //通知connectPromise连接完成
                 fulfillConnectPromise(connectPromise, wasActive);
             } catch (Throwable t) {
+                //连接异常
                 fulfillConnectPromise(connectPromise, annotateConnectException(t, requestedRemoteAddress));
             } finally {
                 // Check for null as the connectTimeoutFuture is only created if a connectTimeoutMillis > 0 is used
@@ -347,6 +352,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 if (connectTimeoutFuture != null) {
                     connectTimeoutFuture.cancel(false);
                 }
+                //置空connectPromise
                 connectPromise = null;
             }
         }

@@ -49,14 +49,23 @@ import java.util.Map.Entry;
 public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(Bootstrap.class);
-
+    /**
+     * 默认地址解析器对象
+     */
     private static final AddressResolverGroup<?> DEFAULT_RESOLVER = DefaultAddressResolverGroup.INSTANCE;
-
+    /**
+     * 启动类配置对象
+     */
     private final BootstrapConfig config = new BootstrapConfig(this);
-
+    /**
+     * 地址解析器对象
+     */
     @SuppressWarnings("unchecked")
     private volatile AddressResolverGroup<SocketAddress> resolver =
             (AddressResolverGroup<SocketAddress>) DEFAULT_RESOLVER;
+    /**
+     * 连接地址
+     */
     private volatile SocketAddress remoteAddress;
 
     public Bootstrap() { }
@@ -110,12 +119,13 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * Connect a {@link Channel} to the remote peer.
      */
     public ChannelFuture connect() {
+        //校验必要参数
         validate();
         SocketAddress remoteAddress = this.remoteAddress;
         if (remoteAddress == null) {
             throw new IllegalStateException("remoteAddress not set");
         }
-
+        //解析远程地址，并进行连接
         return doResolveAndConnect(remoteAddress, config.localAddress());
     }
 
@@ -160,10 +170,12 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * @see #connect()
      */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
+        //初始化并注册一个Channel对象，因为注册是异步的过程，所以返回一个ChannelFuture对象
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
 
         if (regFuture.isDone()) {
+            //若执行失败，直接返回
             if (!regFuture.isSuccess()) {
                 return regFuture;
             }
@@ -204,10 +216,11 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                 doConnect(remoteAddress, localAddress, promise);
                 return promise;
             }
-
+            //解析远程地址
             final Future<SocketAddress> resolveFuture = resolver.resolve(remoteAddress);
 
             if (resolveFuture.isDone()) {
+                //解析远程地址失败，关闭Channel,并回调通知Promise异常
                 final Throwable resolveFailureCause = resolveFuture.cause();
 
                 if (resolveFailureCause != null) {
@@ -234,6 +247,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                 }
             });
         } catch (Throwable cause) {
+            //发生异常，并回调通知promise异常
             promise.tryFailure(cause);
         }
         return promise;
@@ -279,7 +293,9 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
 
     @Override
     public Bootstrap validate() {
+        //父类校验
         super.validate();
+        //handler非空
         if (config.handler() == null) {
             throw new IllegalStateException("handler not set");
         }
